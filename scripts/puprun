@@ -1,0 +1,82 @@
+#!/bin/bash
+
+PRIVATE_CONFDIR=/usr/local/etc/puppet-private
+PUBLIC_CONFDIR=/usr/local/etc/puppet-public
+PUPSTOPFILE=/tmp/pupstop
+myname=`basename "$0"`
+
+fyi() {
+  echo "$myname: FYI:" "$@"
+}
+
+error() {
+  echo 1>&2 "$myname:" "$@"
+}
+
+fatal() {
+  error "$@"
+  exit 1
+}
+
+usage() {
+  fatal "usage: $myname"
+}
+
+force=false
+dryrun=true
+while [ $# -gt 0 ]; do
+  # option to force a puppet run if necessary
+  case "$1" in
+  -f)
+    force=true
+    ;;
+  -y)
+    dryrun=false
+    ;;
+  esac
+  shift
+done
+
+# Don't attempt to run puppet if pupstop was invoked
+if [ -e ${PUPSTOPFILE} ] && [ "${force}" = "false" ]; then
+  echo "puppet stopped on ${HOSTNAME} - not doing anything"
+  exit
+fi
+
+# Need to be root
+if [ `id -u -n` != "root" ]; then
+    echo "must run as root, not" `id -u -n`
+    exit
+fi
+
+LOCKFILE=/tmp/puprunlock.txt
+if [ -e ${LOCKFILE} ] && kill -0 `cat ${LOCKFILE}`; then
+    echo "puppet already running"
+    exit
+fi
+
+# make sure the lockfile is removed when we exit and then claim it
+trap "rm -f ${LOCKFILE}; exit" INT TERM EXIT
+
+# echo our PID into the lockfile
+echo $$ > ${LOCKFILE}
+
+# Do a dry run, unless explicitly stated
+if [ "${dryrun}" = "false" ]; then
+  DRYRUNARG=""
+else
+  DRYRUNARG="--noop"
+  fyi "-y wasn't supplied therefore doing a dry-run"
+fi
+
+/usr/bin/puppet apply \
+  --hiera_config ${PUBLIC_CONFDIR}/hiera.yaml \
+  --config ${PUBLIC_CONFDIR}/puppet.conf \
+  --modulepath ${PUBLIC_CONFDIR}/modules:${PRIVATE_CONFDIR}/modules \
+  --verbose \
+  --show_diff \
+  ${DRYRUNARG} \
+  ${PUBLIC_CONFDIR}/site.pp
+
+# Clean out the lockfile
+rm -f ${LOCKFILE}
