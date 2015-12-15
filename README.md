@@ -1,5 +1,7 @@
 ## Vagrant Dev Image
 
+![unmaintained](http://img.shields.io/badge/status-unmaintained-red.png)
+
 This is a basic dev image I spin up to test puppet manifest changes locally.
 The `/usr/local/etc/puppet-public` and `/usr/local/etc/puppet-private`
 directories are linked to the checked-out repos on my host machine.
